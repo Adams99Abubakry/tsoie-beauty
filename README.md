@@ -14,14 +14,14 @@ The public storefront and admin share a versioned catalogue stored in private Ve
 
 ## Admin account
 
-This is a provisioned single-admin account, not public registration. No email verification is required. Credentials are configured only in server environment variables:
+This is a provisioned single-admin account, not public registration. No email verification is required. The initial account is provisioned from server environment variables:
 
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD_HASH`: `salt:scryptHex` (64-byte scrypt output)
 - `ADMIN_SESSION_SECRET`: random secret with at least 32 characters
 - `BLOB_READ_WRITE_TOKEN`: connected private Blob store credential
 
-Never add real passwords or secret values to source control. The browser receives an encrypted HttpOnly, Secure, SameSite=Strict session cookie lasting eight hours. Changing the password hash invalidates existing sessions. Admin write endpoints require both a valid session and same-origin requests. Login attempts are limited in persistent shared storage.
+Never add real passwords or secret values to source control. The browser receives an encrypted HttpOnly, Secure, SameSite=Strict session cookie lasting eight hours. Use **Change password** in the admin account area to enter the current password and a new password (at least 12 characters). Updated salted scrypt hashes are stored in the private account record in Blob storage and take precedence over the initial environment hash, so password changes survive deployments. No email verification is required. Changing the password signs out all existing sessions, including the session making the change. Admin write endpoints require both a valid session and same-origin requests. Login attempts are limited in persistent shared storage.
 
 Payments remain disabled until Stripe, confirmed prices and delivery rules are connected.
 

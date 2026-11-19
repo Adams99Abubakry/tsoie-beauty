@@ -13,7 +13,7 @@ mock.module('@vercel/blob',{namedExports:{BlobNotFoundError,BlobPreconditionFail
  put:async(path,body,options)=>{const old=blobs.get(path);if(options.ifMatch&&old?.etag!==options.ifMatch)throw new BlobPreconditionFailedError();if(!options.ifMatch&&old&&!options.allowOverwrite)throw new BlobAlreadyExistsError();const etag=String(++serial);blobs.set(path,{etag,bytes:typeof body==='string'?Buffer.from(body):body});return {etag};}
 }});
 process.env.NODE_ENV='test';process.env.ADMIN_EMAIL='admin@tsoiebeauty.com';process.env.ADMIN_SESSION_SECRET='test-session-secret-that-is-longer-than-thirty-two-characters';process.env.ADMIN_PASSWORD_HASH='test-salt:'+scryptSync('test-password','test-salt',64).toString('hex');
-const handlers=Object.fromEntries(await Promise.all(['session','products','upload','media'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
+const handlers=Object.fromEntries(await Promise.all(['session','products','upload','media','password'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
 const server=createServer(async(req,res)=>{const url=new URL(req.url,'http://localhost');req.query=Object.fromEntries(url.searchParams);let raw='';for await(const c of req)raw+=c;try{req.body=raw?JSON.parse(raw):undefined;}catch{res.statusCode=400;res.end();return;}res.status=code=>{res.statusCode=code;return res;};res.json=data=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};res.send=body=>res.end(body);const handler=handlers[url.pathname.split('/').at(-1)];if(handler)await handler(req,res);else{res.statusCode=404;res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;after(()=>server.close());
 let cookie='';
@@ -45,4 +45,23 @@ test('protected admin, product edits, uploads and storefront data work together'
 test('login attempts are limited across requests',async()=>{
  for(let i=0;i<10;i++){const res=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:'wrong'},{headers:{'x-forwarded-for':'192.0.2.10'}});assert.equal(res.status,401);}
  const res=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:'test-password'},{headers:{'x-forwarded-for':'192.0.2.10'}});assert.equal(res.status,429);
+});
+
+test('password change verifies the old password, persists the new hash and revokes all old sessions',async()=>{
+ const headers={'x-forwarded-for':'192.0.2.30'};
+ let r=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:'test-password'},{headers});assert.equal(r.status,200);const firstCookie=r.headers.get('set-cookie').split(';')[0];cookie=firstCookie;
+ r=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:'test-password'},{headers});const secondCookie=r.headers.get('set-cookie').split(';')[0];cookie=secondCookie;
+ const change={currentPassword:'test-password',newPassword:'a-new-password-for-tests'};
+ r=await request('/api/password','POST',change,{auth:false,headers});assert.equal(r.status,401);
+ r=await request('/api/password','POST',change,{headers:{...headers,origin:'https://evil.example'}});assert.equal(r.status,403);
+ r=await request('/api/password','POST',{...change,currentPassword:'incorrect'},{headers});assert.equal(r.status,400);
+ r=await request('/api/password','POST',{...change,newPassword:'short'},{headers});assert.equal(r.status,400);
+ r=await request('/api/password','POST',{...change,newPassword:'test-password'},{headers});assert.equal(r.status,400);
+ r=await request('/api/password','POST',change,{headers});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie'),/Max-Age=0/);
+ r=await request('/api/session','GET',undefined,{headers:{cookie:firstCookie}});assert.equal(r.status,401);
+ r=await request('/api/products?admin=1','GET',undefined,{headers:{cookie:secondCookie}});assert.equal(r.status,401);
+ r=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:'test-password'},{headers});assert.equal(r.status,401);
+ r=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:change.newPassword},{headers});assert.equal(r.status,200);cookie=r.headers.get('set-cookie').split(';')[0];
+ r=await request('/api/session');assert.equal(r.status,200);
+ const stored=JSON.parse(blobs.get('security/admin-account.json').bytes.toString());assert.notEqual(stored.passwordHash,process.env.ADMIN_PASSWORD_HASH);assert.ok(!JSON.stringify(stored).includes(change.newPassword));
 });
