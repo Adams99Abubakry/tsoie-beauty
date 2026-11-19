@@ -9,7 +9,7 @@ class BlobPreconditionFailedError extends Error {}
 class BlobAlreadyExistsError extends Error {constructor(){super();this.name='BlobAlreadyExistsError';}}
 let serial=0;
 mock.module('@vercel/blob',{namedExports:{BlobNotFoundError,BlobPreconditionFailedError,
- get:async path=>{const b=blobs.get(path);return b?{statusCode:200,blob:{etag:b.etag},stream:new ReadableStream({start(c){c.enqueue(b.bytes);c.close();}})}:null;},
+ get:async path=>{const b=blobs.get(path);return b?{statusCode:200,blob:{etag:'W/'+b.etag},stream:new ReadableStream({start(c){c.enqueue(b.bytes);c.close();}})}:null;},
  put:async(path,body,options)=>{const old=blobs.get(path);if(options.ifMatch&&old?.etag!==options.ifMatch)throw new BlobPreconditionFailedError();if(!options.ifMatch&&old&&!options.allowOverwrite)throw new BlobAlreadyExistsError();const etag=String(++serial);blobs.set(path,{etag,bytes:typeof body==='string'?Buffer.from(body):body});return {etag};}
 }});
 process.env.NODE_ENV='test';process.env.ADMIN_EMAIL='admin@tsoiebeauty.com';process.env.ADMIN_SESSION_SECRET='test-session-secret-that-is-longer-than-thirty-two-characters';process.env.ADMIN_PASSWORD_HASH='test-salt:'+scryptSync('test-password','test-salt',64).toString('hex');
