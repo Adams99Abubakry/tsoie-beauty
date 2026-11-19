@@ -1,0 +1,14 @@
+{
+  "name": "tsoie-beauty",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-test-module-mocks --test test/*.test.js",
+    "check": "node --check dist/app.js && node --check dist/admin/admin.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "latest",
+    "iron-session": "^8.0.4",
+    "sharp": "^0.34.5"
+  }
+}
