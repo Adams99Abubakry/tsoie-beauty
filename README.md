@@ -23,7 +23,21 @@ This is a provisioned single-admin account, not public registration. No email ve
 
 Never add real passwords or secret values to source control. The browser receives an encrypted HttpOnly, Secure, SameSite=Strict session cookie lasting eight hours. Use **Change password** in the admin account area to enter the current password and a new password (at least 12 characters). Updated salted scrypt hashes are stored in the private account record in Blob storage and take precedence over the initial environment hash, so password changes survive deployments. No email verification is required. Changing the password signs out all existing sessions, including the session making the change. Admin write endpoints require both a valid session and same-origin requests. Login attempts are limited in persistent shared storage.
 
-Payments remain disabled until Stripe, confirmed prices and delivery rules are connected.
+## Stripe checkout
+
+Hosted Stripe Checkout receives canonical products, prices, quantities and shade selections from the server. Browser-supplied prices are ignored. Products without confirmed prices cannot be purchased. Checkout attempts and session creation are idempotent, tracked stock is reserved, and paid stock adjustments are applied once per order.
+
+Required server secrets:
+
+- `STRIPE_SECRET_KEY`: test key `sk_test_…` during testing
+- `STRIPE_WEBHOOK_SECRET`: signing secret for `/api/stripe-webhook`
+
+The hosted redirect does not need a publishable `pk_` key. Test checkout defaults to UK addresses and zero-charge **test delivery**; it never creates a real shipment. Paid and pending orders appear in **Admin → Orders**, and their payment records are accessible in Stripe.
+
+The webhook handles `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, and `checkout.session.expired`. Raw request bytes are verified by the Stripe SDK. The return page checks the session with Stripe before showing a paid confirmation, and requires an unguessable server-generated order token.
+
+Before live launch, configure `STRIPE_SECRET_KEY` with the live secret, the matching live `STRIPE_WEBHOOK_SECRET`, `STRIPE_LIVE_ENABLED=true`, `CHECKOUT_ALLOWED_COUNTRIES` (comma-separated ISO country codes), and `CHECKOUT_SHIPPING_MINOR` (GBP pence). `SITE_URL` defaults to `https://www.tsoiebeauty.com`. Confirm prices, shipping and tax treatment before enabling live mode. Live payment stays disabled unless the explicit launch settings are present.
+
 
 ## Checks
 

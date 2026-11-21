@@ -8,7 +8,7 @@ export default async function handler(req,res){
   try{
     if(req.method==='GET'){
       const admin=req.query?.admin==='1';if(admin)await requireAdmin(req,res);
-      const {data}=await readCatalog();return res.status(200).json({version:data.version,products:data.products.filter(p=>admin||p.published)});
+      const {data}=await readCatalog();return res.status(200).json({version:data.version,products:data.products.filter(p=>admin||p.published).map(p=>{if(admin||p.stock===null)return p;const reserved=Object.values(data.stockReservations||{}).filter(r=>r.expiresAt>Date.now()).reduce((sum,r)=>sum+(r.quantities[p.id]||0),0);return {...p,stock:Math.max(0,p.stock-reserved)};})});
     }
     sameOrigin(req);await requireAdmin(req,res);const body=jsonBody(req),fields=req.method==='DELETE'?null:validateProduct(body);
     const now=new Date().toISOString();
