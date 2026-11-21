@@ -11,3 +11,4 @@ footer{background:var(--brown);color:white;padding:52px var(--gutter) 36px}.foot
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 .dark .tile:not(.gold){color:var(--brown)}.dark .tile:not(.gold) p{color:var(--muted)}.product-art .badge{min-width:66px;min-height:34px;display:grid;place-items:center;padding:7px 12px}@media(max-width:800px){.gallery img{object-fit:contain;background:#f6ead8}}@media(max-width:560px){.product-art .badge{min-width:42px;min-height:22px;padding:5px 8px}}
 .tile.dark{background:var(--brown);color:white}.tile.dark p{color:#e7d8cc}.tile.dark .mini{color:var(--gold)}
+@media(max-width:800px){#dialog input,#dialog select,#dialog textarea{font-size:16px}}
