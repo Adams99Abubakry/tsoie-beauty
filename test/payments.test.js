@@ -28,12 +28,12 @@ test('checkout uses server prices, reserves stock, verifies Stripe signatures an
  res=await request('/api/checkout','POST',cart);assert.equal(res.status,200);assert.equal(sessionCreates,1);
  res=await request('/api/products');assert.equal((await res.json()).products.find(p=>p.id==='0').stock,1);
  res=await request('/api/checkout','POST',{requestId:randomUUID(),items:[{id:'0',quantity:2,shade:0}]});assert.equal(res.status,409);
- const session=sessions.get('cs_test_1');session.status='complete';session.payment_status='paid';session.customer_details={name:'Test Customer',email:'customer@example.com'};
+ const session=sessions.get('cs_test_1');session.status='complete';session.payment_status='paid';session.presentment_details={presentment_amount:2041,presentment_currency:'usd'};session.customer_details={name:'Test Customer',email:'customer@example.com'};
  res=await webhook('checkout.session.completed',session,true);assert.equal(res.status,400);
  res=await webhook('checkout.session.completed',{...session,amount_total:1});assert.equal(res.status,500);
  res=await webhook('checkout.session.completed',session);assert.equal(res.status,200);
  res=await webhook('checkout.session.completed',session);assert.equal(res.status,200);
- const record=await payments.readOrder(id);assert.equal(record.data.status,'paid');assert.equal(record.data.total,1500);assert.equal(record.data.customer.email,'customer@example.com');
+ const record=await payments.readOrder(id);assert.equal(record.data.status,'paid');assert.equal(record.data.total,1500);assert.deepEqual(record.data.presentment,{amount:2041,currency:'USD'});assert.equal(record.data.customer.email,'customer@example.com');
  const data=(await readCatalog()).data;assert.equal(data.products[0].stock,1);assert.equal(data.paidOrderIds.filter(x=>x===id).length,1);assert.ok(!data.stockReservations[id]);
  const token=payments.accessToken(record.data);res=await request('/api/order?id='+id+'&token='+token);const order=await res.json();assert.equal(order.status,'paid');assert.equal(order.items[0].unitAmount,1500);assert.ok(!('customer' in order));
  res=await request('/api/order?id='+id+'&token='+'0'.repeat(64));assert.equal(res.status,404);

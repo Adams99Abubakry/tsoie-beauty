@@ -11,6 +11,6 @@ export default async function handler(req,res){
   if(['checkout.session.completed','checkout.session.async_payment_succeeded'].includes(event.type))await confirmSession(session);
   else if(event.type==='checkout.session.expired')await expireSession(session,'expired');
   else if(event.type==='checkout.session.async_payment_failed')await expireSession(session,'failed');
-  return res.status(200).json({received:true});
+  console.info('Stripe event processed:',event.type,event.id);return res.status(200).json({received:true});
  }catch(e){console.error('Stripe webhook processing failed:',e.name);return res.status(500).json({error:'Payment confirmation will be retried.'});}
 }

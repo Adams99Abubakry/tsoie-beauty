@@ -25,7 +25,7 @@ Never add real passwords or secret values to source control. The browser receive
 
 ## Stripe checkout
 
-Hosted Stripe Checkout receives canonical products, prices, quantities and shade selections from the server. Browser-supplied prices are ignored. Products without confirmed prices cannot be purchased. Checkout attempts and session creation are idempotent, tracked stock is reserved, and paid stock adjustments are applied once per order.
+Hosted Stripe Checkout receives canonical products, prices, quantities and shade selections from the server. Browser-supplied prices are ignored. Stripe Adaptive Pricing is enabled: customers may choose a supported local currency at the rate shown by Stripe. Orders retain the original GBP totals and the confirmed local presentment amount/currency. Products without confirmed prices cannot be purchased. Checkout attempts and session creation are idempotent, tracked stock is reserved, and paid stock adjustments are applied once per order.
 
 Required server secrets:
 
