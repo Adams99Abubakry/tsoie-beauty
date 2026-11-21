@@ -6,6 +6,12 @@ Static storefront with a protected admin studio and Vercel Node.js API functions
 - Admin: `https://www.tsoiebeauty.com/admin/`
 - Deploy: push `main` to the connected Vercel project `tsoie-beauty-web`.
 
+## Storefront navigation and cart
+
+The sticky header includes a prominent Cart button and item count. On phones and small tablets, a bottom navigation bar keeps Shop, Search and Cart accessible. Adding a product opens a confirmation with a direct View cart action. The cart supports quantity changes and removal, and existing stored carts are preserved. The primary route is `/#/cart`; older `/#/bag` links still work.
+
+The layout uses fluid grids and a mobile navigation drawer. Product galleries support horizontal swipe on smaller screens. Browser QA covered nine storefront pages at 11 viewport sizes from 320px to 1440px, including landscape, and the mobile add-to-cart and checkout request flow.
+
 ## Product management
 
 The admin can create, edit, publish, unpublish and delete products; set GBP prices in minor units, optional stock quantities, descriptions and badges; and upload JPG, PNG or WebP product images up to 3 MB. Images are re-encoded as optimised WebP. Existing products are seeded once, with their original artwork and unconfirmed prices left unset.
