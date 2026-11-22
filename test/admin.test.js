@@ -13,7 +13,7 @@ mock.module('@vercel/blob',{namedExports:{BlobNotFoundError,BlobPreconditionFail
  put:async(path,body,options)=>{const old=blobs.get(path);if(options.ifMatch&&old?.etag!==options.ifMatch)throw new BlobPreconditionFailedError();if(!options.ifMatch&&old&&!options.allowOverwrite)throw new BlobAlreadyExistsError();const etag=String(++serial);blobs.set(path,{etag,bytes:typeof body==='string'?Buffer.from(body):body});return {etag};}
 }});
 process.env.NODE_ENV='test';process.env.ADMIN_EMAIL='admin@tsoiebeauty.com';process.env.ADMIN_SESSION_SECRET='test-session-secret-that-is-longer-than-thirty-two-characters';process.env.ADMIN_PASSWORD_HASH='test-salt:'+scryptSync('test-password','test-salt',64).toString('hex');
-const handlers=Object.fromEntries(await Promise.all(['session','products','upload','media','password'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
+const handlers=Object.fromEntries(await Promise.all(['session','products','upload','media','password','contact','cart'].map(async name=>[name,(await import(`../api/${name}.js`)).default])));
 const server=createServer(async(req,res)=>{const url=new URL(req.url,'http://localhost');req.query=Object.fromEntries(url.searchParams);let raw='';for await(const c of req)raw+=c;try{req.body=raw?JSON.parse(raw):undefined;}catch{res.statusCode=400;res.end();return;}res.status=code=>{res.statusCode=code;return res;};res.json=data=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};res.send=body=>res.end(body);const handler=handlers[url.pathname.split('/').at(-1)];if(handler)await handler(req,res);else{res.statusCode=404;res.end();}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;after(()=>server.close());
 let cookie='';
@@ -64,4 +64,31 @@ test('password change verifies the old password, persists the new hash and revok
  r=await request('/api/session','POST',{email:process.env.ADMIN_EMAIL,password:change.newPassword},{headers});assert.equal(r.status,200);cookie=r.headers.get('set-cookie').split(';')[0];
  r=await request('/api/session');assert.equal(r.status,200);
  const stored=JSON.parse(blobs.get('security/admin-account.json').bytes.toString());assert.notEqual(stored.passwordHash,process.env.ADMIN_PASSWORD_HASH);assert.ok(!JSON.stringify(stored).includes(change.newPassword));
+});
+
+test('contact is server validated, private, idempotent and manageable only by admin',async()=>{
+ const {randomUUID}=await import('node:crypto');const id=randomUUID();const body={requestId:id,first:'Test',last:'Customer',email:'test@example.com',topic:'Product questions',message:'<img src=x onerror=alert(1)> Product question for testing.'};
+ let r=await request('/api/contact','GET',undefined,{auth:false});assert.equal(r.status,401);
+ r=await request('/api/contact','POST',body,{headers:{origin:'null'}});assert.equal(r.status,403);
+ r=await request('/api/contact','POST',body,{headers:{origin:'not-a-url'}});assert.equal(r.status,403);
+ r=await request('/api/contact','POST',body,{headers:{origin:base.replace('http:','https:')}});assert.equal(r.status,403);
+ r=await request('/api/contact','POST',{...body,email:'invalid'});assert.equal(r.status,400);
+ r=await request('/api/contact','POST',body);assert.equal(r.status,200);assert.match((await r.json()).reference,/TSOIE-/);
+ r=await request('/api/contact','POST',body);assert.equal(r.status,200);
+ r=await request('/api/contact');assert.equal(r.status,200);const data=await r.json();assert.equal(data.messages.filter(m=>m.id===id).length,1);const message=data.messages.find(m=>m.id===id);assert.match(message.message,/<img/);assert.ok(!('fingerprint' in message));
+ r=await request('/api/contact','PUT',{id,revision:message.revision,status:'read'},{auth:false});assert.equal(r.status,401);
+ r=await request('/api/contact','PUT',{id,revision:message.revision,status:'read'});assert.equal(r.status,200);
+ r=await request('/api/contact','DELETE',{id,revision:message.revision+1});assert.equal(r.status,200);
+ assert.equal(JSON.parse(blobs.get('contact/messages/'+id+'.json').bytes).email,undefined);
+});
+test('server cart has a protected cookie, validates writes, rejects stale edits and is isolated per visitor',async()=>{
+ let r=await request('/api/cart','GET',undefined,{auth:false});assert.equal(r.status,200);const cartCookie=r.headers.get('set-cookie').split(';')[0];assert.match(r.headers.get('set-cookie'),/HttpOnly/i);assert.match(r.headers.get('set-cookie'),/SameSite=Lax/i);
+ const body={items:[{id:'0',qty:2,shade:1,price:1}],revision:0};
+ r=await request('/api/cart','PUT',body,{headers:{cookie:cartCookie,origin:'https://evil.example'}});assert.equal(r.status,403);
+ r=await request('/api/cart','PUT',{...body,items:[{id:'0',qty:-1,shade:1}]},{headers:{cookie:cartCookie}});assert.equal(r.status,400);
+ r=await request('/api/cart','PUT',body,{headers:{cookie:cartCookie}});assert.equal(r.status,200);const saved=await r.json();assert.deepEqual(saved.items,[{id:'0',qty:2,shade:1}]);assert.equal(saved.revision,1);
+ r=await request('/api/cart','GET',undefined,{headers:{cookie:cartCookie}});assert.deepEqual((await r.json()).items,saved.items);
+ r=await request('/api/cart','PUT',body,{headers:{cookie:cartCookie}});assert.equal(r.status,409);
+ r=await request('/api/cart','GET',undefined,{auth:false});assert.deepEqual((await r.json()).items,[]);
+ r=await request('/api/cart','GET',undefined,{headers:{cookie:'tsoie_cart=invalid'}});assert.deepEqual((await r.json()).items,[]);
 });

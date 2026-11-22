@@ -11,9 +11,9 @@ mock.module('@vercel/blob',{namedExports:{BlobNotFoundError,BlobPreconditionFail
 }});
 class TestStripe extends RealStripe{constructor(...args){super(...args);this.checkout={sessions:{create:async(params)=>{lastParams=params;sessionCreates++;const session={id:'cs_test_'+sessionCreates,url:'https://checkout.stripe.com/c/pay/test_'+sessionCreates,status:'open',payment_status:'unpaid',livemode:false,currency:'gbp',amount_total:params.line_items.reduce((sum,i)=>sum+i.price_data.unit_amount*i.quantity,0)+params.shipping_options[0].shipping_rate_data.fixed_amount.amount,metadata:params.metadata};sessions.set(session.id,session);return session;},retrieve:async id=>structuredClone(sessions.get(id))}};}}
 mock.module('stripe',{defaultExport:TestStripe});
-process.env.STRIPE_SECRET_KEY='sk_test_unit-only';process.env.STRIPE_WEBHOOK_SECRET='whsec_unit-only';process.env.ADMIN_SESSION_SECRET='unit-secret-with-at-least-thirty-two-characters';process.env.SITE_URL='https://www.tsoiebeauty.com';
+process.env.NODE_ENV='test';process.env.STRIPE_SECRET_KEY='sk_test_unit-only';process.env.STRIPE_WEBHOOK_SECRET='whsec_unit-only';process.env.ADMIN_SESSION_SECRET='unit-secret-with-at-least-thirty-two-characters';process.env.SITE_URL='https://www.tsoiebeauty.com';
 const payments=await import('../lib/payments.js');const {readCatalog,mutateCatalog}=await import('../lib/storage.js');
-const routes=Object.fromEntries(await Promise.all(['checkout','stripe-webhook','order','products'].map(async name=>[name,(await import('../api/'+name+'.js')).default])));
+const routes=Object.fromEntries(await Promise.all(['checkout','stripe-webhook','order','products','cart'].map(async name=>[name,(await import('../api/'+name+'.js')).default])));
 const server=createServer(async(req,res)=>{const url=new URL(req.url,'http://localhost');req.query=Object.fromEntries(url.searchParams);res.status=code=>{res.statusCode=code;return res;};res.json=data=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};const route=routes[url.pathname.split('/').at(-1)];if(!route){res.statusCode=404;return res.end();}if(url.pathname!=='/api/stripe-webhook'){let raw='';for await(const c of req)raw+=c;req.body=raw?JSON.parse(raw):undefined;}await route(req,res);});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;after(()=>server.close());
 async function request(path,method='GET',data,headers={}){return fetch(base+path,{method,headers:{origin:base,'Content-Type':'application/json',...headers},body:data?JSON.stringify(data):undefined});}
@@ -41,4 +41,9 @@ test('checkout uses server prices, reserves stock, verifies Stripe signatures an
 });
 test('live money remains disabled without explicit live configuration',()=>{
  const original=process.env.STRIPE_SECRET_KEY;process.env.STRIPE_SECRET_KEY='sk_live_unit-only';const settings=payments.paymentSettings();assert.equal(settings.ready,false);assert.ok(settings.missing.includes('STRIPE_LIVE_ENABLED'));assert.ok(settings.missing.includes('CHECKOUT_SHIPPING_MINOR'));assert.ok(settings.missing.includes('CHECKOUT_ALLOWED_COUNTRIES'));process.env.STRIPE_SECRET_KEY=original;
+});
+
+test('new checkout uses the cookie-bound saved cart instead of browser supplied amounts or items',async()=>{
+ let res=await request('/api/cart');const cookie=res.headers.get('set-cookie').split(';')[0];res=await request('/api/cart','PUT',{revision:0,items:[{id:'0',qty:1,shade:0}]},{cookie});assert.equal(res.status,200);
+ res=await request('/api/checkout','POST',{useSavedCart:true,requestId:randomUUID(),items:[{id:'0',quantity:99,shade:0,price:1}]},{cookie});assert.equal(res.status,200);assert.equal(lastParams.line_items[0].quantity,1);assert.equal(lastParams.line_items[0].price_data.unit_amount,1500);
 });

@@ -56,3 +56,21 @@ npm test
 ```
 
 Tests exercise the real API handlers with an isolated in-memory Blob adapter, HTTP requests, session cookies and image processing. Storefront tests verify catalogue updates, escaped content, UUID products, price totals and stock handling. No production data or real credentials are used by the test suite.
+
+## Cookies, contact messages and security review
+
+The public site and admin show a cookie notice with equally prominent Accept all and Reject optional choices, plus settings that can be reopened. Only necessary storage is currently used; no optional analytics or advertising scripts are installed. Preferences expire after 180 days. The site includes Cookies & storage and Privacy notices describing the actual cart, admin and Stripe processing. Admin no longer fetches Google Fonts.
+
+The contact form posts JSON to `/api/contact`, with client and server validation, a honeypot, payload limits, persistent rate limits and retry-safe request IDs. Messages are saved in private storage and read in **Admin → Messages**. Admin can mark them read/unread or delete their current personal content. Sending emails automatically is not configured; the inbox provides a Reply by email action for the admin.
+
+The cart is persisted server-side using an opaque encrypted HttpOnly, Secure, SameSite=Lax cookie. Cart records have a 30-day TTL, validate IDs/quantities/shades and reject stale revisions. Browser storage is a cache and migration path, not the checkout price authority. New checkout requests use the cookie-bound saved cart; legacy clients remain compatible with server-validated catalogue prices. No card information is accepted by the contact or cart endpoints.
+
+Security verification covers:
+
+- Exact Origin (scheme and host), Fetch Metadata and JSON content-type checks for browser writes; malformed and cross-site origins are rejected.
+- Protected admin data and mutations, encrypted session cookies, hashed passwords, login limits and password-change session invalidation.
+- Escaped rendering of product and contact text, private message storage and separate publicly readable product-image delivery.
+- Canonical server prices, stock checks/reservations and idempotent Stripe Checkout creation.
+- Stripe raw-body signature validation, order/session/mode/total checks and idempotent payment confirmation/stock adjustment.
+
+Automated tests include cross-site/malformed requests, unauthorised access, stored message handling/deletion, cart isolation and tampered cookies, stale writes, browser price tampering, duplicate Stripe events and bad webhook signatures. Browser checks verify notice persistence, settings, cart restoration without local cache, contact submission and safe admin message rendering.
